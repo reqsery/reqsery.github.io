@@ -1,0 +1,43 @@
+---
+title: reqsery docs
+description: Documentation for MC Mod Porter and Voice Parties — Minecraft modding tools by reqsery.
+template: splash
+hero:
+  tagline: Minecraft Java modding tools — a version porter for mod developers and a cross-server voice & chat mod for players.
+  actions:
+    - text: MC Mod Porter docs
+      link: /mc-mod-porter/
+      icon: right-arrow
+    - text: Voice Parties docs (WIP)
+      link: /voice-parties/
+      icon: right-arrow
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Projects
+
+<CardGrid>
+	<Card title="MC Mod Porter">
+		Port Fabric and NeoForge mod **source projects** between Minecraft 1.16 and 26.x. One JAR with a desktop GUI and
+		a CLI, backed by a sourced migration knowledge base. **Status: Beta** (`v1.3.0-beta`).
+
+		[Read the docs →](/mc-mod-porter/) · [GitHub](https://github.com/reqsery/mc-mod-porter)
+	</Card>
+	<Card title="Voice Parties">
+		Client-side party voice, party chat, DMs and friends that follow you to every server — nothing for the server
+		owner to install. **Status: pre-release / WIP** (heading for `0.1.0`).
+
+		[Read the docs →](/voice-parties/)
+	</Card>
+</CardGrid>
+
+## Quick links
+
+<CardGrid>
+	<LinkCard title="Download MC Mod Porter" description="auto-porter-1.3.0-beta.jar on GitHub Releases" href="https://github.com/reqsery/mc-mod-porter/releases/tag/v1.3.0-beta" />
+	<LinkCard title="Troubleshooting a port" description="Common build, Java, Loom and dependency errors" href="/mc-mod-porter/troubleshooting/" />
+	<LinkCard title="Discord" description="Support, bug reports and Voice Parties testing" href="https://discord.gg/vV2USr9phF" />
+	<LinkCard title="Portfolio" description="reqsery.vercel.app" href="https://reqsery.vercel.app/" />
+</CardGrid>

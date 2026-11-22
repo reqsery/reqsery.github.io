@@ -1,0 +1,40 @@
+/* Clean dark developer theme: deep slate surfaces with a blue accent. */
+:root,
+::backdrop {
+	--sl-color-accent-low: #0d2a40;
+	--sl-color-accent: #2b90d9;
+	--sl-color-accent-high: #b9defa;
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #e6ebf1;
+	--sl-color-gray-2: #c0c8d2;
+	--sl-color-gray-3: #8b96a5;
+	--sl-color-gray-4: #545f6e;
+	--sl-color-gray-5: #333c48;
+	--sl-color-gray-6: #1c222b;
+	--sl-color-black: #12161c;
+	--sl-font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+	--sl-color-accent-low: #cfe7fa;
+	--sl-color-accent: #1a6fae;
+	--sl-color-accent-high: #0d3a5c;
+	--sl-color-white: #12161c;
+	--sl-color-gray-1: #1c222b;
+	--sl-color-gray-2: #333c48;
+	--sl-color-gray-3: #545f6e;
+	--sl-color-gray-4: #8b96a5;
+	--sl-color-gray-5: #c0c8d2;
+	--sl-color-gray-6: #eef2f6;
+	--sl-color-gray-7: #f7f9fb;
+	--sl-color-black: #ffffff;
+}
+
+.hero img {
+	border-radius: 1rem;
+}
+
+.card {
+	border-radius: 0.75rem;
+}

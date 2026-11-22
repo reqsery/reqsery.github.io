@@ -1,0 +1,283 @@
+---
+title: Troubleshooting
+description: Fixes for common MC Mod Porter errors and build failures in ported Fabric/NeoForge projects.
+---
+
+## Porter errors
+
+### "Auto-Porter needs a mod source/project folder, not a compiled file"
+
+You selected a `.jar` (or `.zip`). Compiled mod JARs from Modrinth/CurseForge cannot be ported. Use the folder that contains `build.gradle`, `gradle.properties`, `gradlew`/`gradlew.bat` and `src/`. Extract source ZIPs first.
+
+### "Unknown source version" / "Unknown target version"
+
+The version is not in the supported list. Run `java -jar auto-porter-1.3.0-beta.jar --list-versions` and use an exact entry (e.g. `1.17.1`, not `1.17`). See [Supported Versions](/mc-mod-porter/supported-versions/).
+
+### The porter itself will not start
+
+MC Mod Porter requires **Java 21+**. Run `java -version`; if it reports an older JDK, install Java 21 or newer and make sure it is first on `PATH` (or set `JAVA_HOME`).
+
+### "Port complete with issues — review port-report.json"
+
+The mechanical port finished but something needs attention: a failed patch step, a migration warning, or a failing build. Open `build/port-report.json` in the ported project — each step has `success`, `message` and `changes`. Migration warnings point to code that must be migrated by hand.
+
+### Linux/macOS: `./gradlew: Permission denied`
+
+Fixed in v1.3.0-beta (the porter restores the executable bit). On older versions run `chmod +x gradlew`.
+
+:::note
+The sections below come from the repository troubleshooting guide. Names differ by mapping namespace: examples labeled **Mojang mappings** use names such as `KeyMapping` and `GuiGraphics`; the same classes are `KeyBinding` and `DrawContext` in **Yarn**.
+:::
+
+## Build failures
+
+### `error: cannot find symbol — KeyEvent`
+
+**Cause:** Minecraft changed GUI keyboard callbacks in **1.21.9**, not 1.21.10. In Mojang mappings the event type is `net.minecraft.client.input.KeyEvent`; Yarn calls the corresponding type `KeyInput`. Minecraft 1.21.8 and earlier use three integer parameters.
+
+**Fix when targeting 1.21.8 or earlier:**
+
+```java
+// 1.21.8 and earlier
+boolean keyPressed(int keyCode, int scanCode, int modifiers)
+```
+
+Use `keyCode` where newer code uses `event.key()` or the equivalent accessor in the selected mappings. When targeting 1.21.9 or later, keep the event-object callback and use the exact name from the selected mappings.
+
+Sources: [Yarn 1.21.4 GUI callbacks](https://maven.fabricmc.net/docs/yarn-1.21.4%2Bbuild.1/net/minecraft/client/gui/Element.html), [Yarn 1.21.9 GUI callbacks](https://maven.fabricmc.net/docs/yarn-1.21.9%2Bbuild.1/net/minecraft/client/gui/Element.html)
+
+### `error: cannot find symbol — MouseButtonEvent`
+
+**Cause:** Mouse callbacks also changed in **1.21.9**. Mojang mappings use `MouseButtonEvent`; Yarn calls the corresponding type `Click`. Minecraft 1.21.8 and earlier use coordinates and a button number.
+
+**Fix when targeting 1.21.8 or earlier:**
+
+```java
+// 1.21.8 and earlier
+boolean mouseClicked(double mouseX, double mouseY, int button)
+```
+
+Replace event coordinate accessors with `mouseX` and `mouseY`. For 1.21.9 or later, retain the event object and verify its mapped name.
+
+Sources: [Yarn 1.21.4 GUI callbacks](https://maven.fabricmc.net/docs/yarn-1.21.4%2Bbuild.1/net/minecraft/client/gui/Element.html), [Yarn 1.21.9 GUI callbacks](https://maven.fabricmc.net/docs/yarn-1.21.9%2Bbuild.1/net/minecraft/client/gui/Element.html)
+
+### `error: cannot find symbol — KeyMapping.Category`
+
+**Cause:** `KeyMapping.Category` (Yarn: `KeyBinding.Category`) was introduced in **1.21.9**. Minecraft 1.21.8 and earlier store the category as a `String`.
+
+**Fix when targeting 1.21.8 or earlier:**
+
+```java
+String category = "key.categories.misc";
+```
+
+For 1.21.9 or later, use the category record and its registration/creation API in the selected mappings.
+
+Sources: [Yarn 1.21.4 KeyBinding](https://maven.fabricmc.net/docs/yarn-1.21.4%2Bbuild.4/net/minecraft/client/option/KeyBinding.html), [Yarn 1.21.9 KeyBinding.Category](https://maven.fabricmc.net/docs/yarn-1.21.9%2Bbuild.1/net/minecraft/client/option/KeyBinding.Category.html)
+
+### `error: no suitable method found for blit(...)`
+
+**Cause:** GUI texture overloads changed more than once during the 1.21.x rendering work. The previous guide incorrectly treated this as a single 1.21.10 change and reversed the old/new forms.
+
+Minecraft 1.21.4's Mojang-mapped `GuiGraphics.blit` requires a render-type function and pixel UV coordinates:
+
+```java
+graphics.blit(
+    RenderType::guiTextured,
+    texture,
+    x, y,
+    u, v,
+    width, height,
+    textureWidth, textureHeight
+);
+```
+
+Later 1.21.x versions use a `RenderPipeline` for the corresponding overload. Do not convert pixel UVs to fractional UVs unless the target overload explicitly requests them; select the overload from the target version's mappings.
+
+Sources: [Yarn 1.21.4 DrawContext](https://maven.fabricmc.net/docs/yarn-1.21.4%2Bbuild.1/net/minecraft/client/gui/DrawContext.html), [Yarn 1.21.7 DrawContext](https://maven.fabricmc.net/docs/yarn-1.21.7%2Bbuild.1/net/minecraft/client/gui/DrawContext.html), [NeoForged 1.21.5 rendering primer](https://github.com/neoforged/.github/blob/main/primers/1.21.5/index.md)
+
+### `error: cannot find symbol — PlayerSkin` (wrong package)
+
+**Cause:** `PlayerSkin` moved and changed shape in **1.21.9**:
+
+- 1.21.8 and earlier: `net.minecraft.client.resources.PlayerSkin`
+- 1.21.9 and later: `net.minecraft.world.entity.player.PlayerSkin`
+
+The old `texture()`/`textureUrl()` representation became a `body()` client texture. Code that needs the resource path generally uses `skin.body().texturePath()` after the migration.
+
+Source: [NeoForged 1.21.8 → 1.21.9 migration primer](https://docs.neoforged.net/primer/docs/1.21.9/)
+
+### `error: cannot find symbol — FMLEnvironment.getDist()`
+
+**Cause:** This API belongs to FancyModLoader, so its shape follows the FML version rather than vanilla Minecraft mappings. NeoForge's official 1.21.1 documentation uses the public `FMLEnvironment.dist` field. Newer FML source may expose `getDist()` instead. The previous guide's claim that 21.10 changed `getDist()` into `dist` was backwards.
+
+**Fix:** For a target whose FML API exposes the field, use:
+
+```java
+FMLEnvironment.dist
+```
+
+For a target whose FML API exposes the accessor, use:
+
+```java
+FMLEnvironment.getDist()
+```
+
+Do not apply this as an unconditional text replacement; check the FML dependency resolved by the target NeoForge artifact.
+
+Sources: [NeoForge 1.21.1 sides documentation](https://docs.neoforged.net/docs/1.21.1/concepts/sides/), [FancyModLoader source](https://github.com/neoforged/FancyModLoader)
+
+### `error: package net.minecraftforge does not exist`
+
+**Cause:** NeoForge forked from Forge in the 1.20.2 development cycle and renamed its own packages from `net.minecraftforge` to `net.neoforged`.
+
+**Fix:** Update imports and loader-owned references using the actual NeoForge class locations. Do not replace every occurrence blindly: Maven coordinates, plugin IDs, metadata, service declarations, third-party APIs, and user-facing text do not all follow one package substitution.
+
+Sources: [NeoForge source](https://github.com/neoforged/NeoForge), [NeoForged migration primers](https://github.com/neoforged/.github/tree/main/primers)
+
+### `error: PacketByteBuf cannot be resolved`
+
+**Cause:** Usually a mapping-namespace mismatch, not removal in Minecraft 1.20.5. `PacketByteBuf` is the Yarn name. In 1.20.5 it still exists, and Yarn's `RegistryByteBuf` extends it. Mojang mappings call the corresponding registry-aware type `RegistryFriendlyByteBuf`.
+
+**Fix:**
+
+- Stay within one mapping namespace.
+- Use the base packet buffer for ordinary data.
+- Use the registry-aware buffer only when serialization needs registry access.
+- Do not globally replace every `PacketByteBuf` with `RegistryFriendlyByteBuf`.
+
+Sources: [Yarn 1.20.5 RegistryByteBuf](https://maven.fabricmc.net/docs/yarn-1.20.5-rc2%2Bbuild.1/net/minecraft/network/RegistryByteBuf.html), [NeoForged 1.20.5 migration primer](https://github.com/neoforged/.github/blob/main/primers/1.20.5/index.md#stream-codecs)
+
+## Java and mapping issues
+
+### `invalid source release: 21`
+
+The selected JDK is older than the configured Java toolchain.
+
+1. Run `java -version`, `javac -version`, and `./gradlew --version`.
+2. Install the required JDK.
+3. Point `JAVA_HOME` at it and reopen the terminal.
+
+Do not lower the project's Java target merely to make an older local JDK compile it.
+
+### `UnsupportedClassVersionError`
+
+The runtime is older than the Java version used to compile the class. Common class-file major versions are:
+
+- `61`: Java 17
+- `65`: Java 21
+- `69`: Java 25
+
+Run the tool or mod with a compatible JDK. Auto-Porter itself is configured for Java 21; Minecraft 26.x development requires Java 25.
+
+Source: [Java Virtual Machine Specification, class-file format](https://docs.oracle.com/javase/specs/jvms/se25/html/jvms-4.html)
+
+## Dependency resolution
+
+### Gradle cannot find a NeoForge artifact
+
+NeoForge `21.4.0-beta` through `21.4.120-beta` use the `-beta` suffix. Starting at `21.4.121`, the published 21.4 artifacts omit it. This cutoff is specific to the 21.4 line; do not generalize it to other Minecraft/NeoForge lines.
+
+Always copy the exact published version from the official repository: [NeoForged Maven releases](https://maven.neoforged.net/releases/net/neoforged/neoforge/)
+
+Then refresh dependencies:
+
+```bash
+./gradlew --refresh-dependencies
+```
+
+### A Fabric API module cannot be found
+
+Fabric API modules can be deprecated, replaced, or removed. For example, current 26.x Fabric API source contains `fabric-convention-tags-v2`, not `fabric-convention-tags-v1`.
+
+**Fix:** Check the exact Fabric API release/source tree. If a major-version replacement exists, migrate its API and data semantics; merely renaming or deleting the dependency may leave broken imports or tags.
+
+Sources: [Fabric API source tree](https://github.com/FabricMC/fabric-api), [Fabric API releases](https://github.com/FabricMC/fabric-api/releases)
+
+### Gradle cannot find a third-party mod API
+
+**Example:**
+
+```text
+Could not find mezz.jei:jei-26.2-neoforge-api:19.22.1.316
+```
+
+**Cause:** The ported project is asking Gradle for a dependency artifact that is not published in the configured Maven repositories. This can happen when a mod's build logic constructs dependency coordinates from the target Minecraft version, but that integration mod has not published a matching build yet.
+
+This is a dependency availability issue, not Auto-Porter crashing. Auto-Porter may still have copied the project, updated versions, patched sources, and written `port-report.json`; the final build fails because Gradle cannot download the requested API.
+
+**Fix:** Check the third-party mod's official Maven or release page for the exact artifact and version that supports the target Minecraft/loader combination. If no matching artifact exists, temporarily disable that integration, choose an available version, or wait for the dependency to publish support for the target version.
+
+Sources: [BlameJared Maven](https://maven.blamejared.com/), [JEI releases](https://github.com/mezz/JustEnoughItems/releases)
+
+## Loom issues
+
+### `Could not find dev.architectury.loom:...-SNAPSHOT`
+
+**Cause:** The requested Architectury Loom snapshot is not available from the configured plugin/Maven repositories, or that version was never published there.
+
+**Fix:** Verify the version against Architectury Loom's official releases and configure the repository documented by that project. Do not assume an arbitrary Loom version supports every target: Loom is not tied one-to-one to a Minecraft version, but compatibility changes with Minecraft, Gradle, Java, mappings, and loader tooling.
+
+Source: [Architectury Loom](https://github.com/architectury/architectury-loom)
+
+### Fabric Loom fails after changing Minecraft versions
+
+Use the Loom line required by Fabric for the target Minecraft version and then select an actually published build from Fabric Maven. This repository uses `1.17.13` for Minecraft 26.2 and stable Loom `1.17.21` with Gradle `9.6.0` for Minecraft 26.3, matching Fabric's official 26.3 release guidance for the Loom 1.17 line.
+
+Sources: [Fabric development for Minecraft 26.2](https://fabricmc.net/2026/06/15/262.html), [Fabric for Minecraft 26.3](https://fabricmc.net/2026/09/15/263.html), [Fabric Loom Maven](https://maven.fabricmc.net/net/fabricmc/fabric-loom/)
+
+### `silentMojangMappingsLicense() not found`
+
+**Cause:** The selected Fabric/Architectury Loom version does not expose this older DSL helper. The helper suppresses the Mojang mappings license prompt; it does not select the mappings dependency.
+
+**Fix:** Remove only the `silentMojangMappingsLicense()` call. Keep the actual mappings declaration, such as `mappings loom.officialMojangMappings()`, when the project uses Mojang mappings. Do not claim a fixed removal boundary without checking the selected Loom implementation.
+
+Sources: [Fabric Loom source](https://github.com/FabricMC/fabric-loom), [Architectury Loom source](https://github.com/architectury/architectury-loom)
+
+## Minecraft 26.2 pack metadata
+
+Minecraft Java Edition 26.2 uses:
+
+- Data Pack version `107.1`
+- Resource Pack version `88.0`
+
+Snapshot pack versions are provisional; use the final release notes for a release target.
+
+Source: [Minecraft Java Edition 26.2](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-2)
+
+## Minecraft 26.3 pack metadata
+
+Minecraft Java Edition 26.3 uses:
+
+- Data Pack version `121.0`
+- Resource Pack version `97.1`
+
+Snapshot and prerelease pack versions are provisional. Auto-Porter uses the final release values above.
+
+Source: [Minecraft Java Edition 26.3](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-3)
+
+## Gradle cache and daemon problems
+
+First stop daemons and retry with refreshed dependencies:
+
+```bash
+./gradlew --stop
+./gradlew clean build --refresh-dependencies
+```
+
+On Windows, also check whether an IDE, antivirus scanner, or another Gradle process holds a file lock. Avoid deleting the entire global Gradle cache unless the error identifies corrupt cached content and a refresh does not repair it.
+
+## Reporting an unresolved failure
+
+Include:
+
+- source and target Minecraft versions;
+- mapping namespace;
+- loader and exact loader version;
+- Fabric API or NeoForge version;
+- Loom and Gradle versions;
+- `java -version` and `./gradlew --version` output;
+- the first relevant compiler or dependency-resolution error;
+- the generated `gradle.properties` and dependency block.
+
+Ask on the [Discord](https://discord.gg/vV2USr9phF) or [open a bug report](https://github.com/reqsery/mc-mod-porter/issues/new?template=bug_report.md) with that information.
