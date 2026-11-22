@@ -5,8 +5,8 @@ sidebar:
   label: Knowledge Base & Migration Rules
 ---
 
-The knowledge base is what makes MC Mod Porter different from "ask an AI to port my mod": every change it applies or
-documents is backed by a **linked official source**.
+The knowledge base is what makes MC Mod Porter trustworthy: every change it applies or documents is backed by a
+**linked official source**.
 
 ## Layout
 
@@ -31,7 +31,7 @@ documents is backed by a **linked official source**.
 
 ## How the porter applies rules
 
-The `knowledge-base/minecraft/*.md` files are **documentation for humans and AI assistants** — the porter does not
+The `knowledge-base/minecraft/*.md` files are **documentation for people porting by hand** — the porter does not
 read them at runtime. What the porter actually applies is a hand-maintained copy of the verified changes in its
 source code: 398 `ApiChangeRule`s, a few mixin method renames, and the 26.2/26.3 resource migrations. The full list
 is on the [Migration Rules](/mc-mod-porter/migration-rules/) page. A KB file can therefore describe a change the
@@ -52,12 +52,16 @@ Each rule has a type label:
 The type is only a label: **every rule is a literal find-and-replace** (`String.replace`) of an exact piece of text,
 applied one rule after another to each `.java` file. Nothing is parsed or type-checked, so a rule only fires on the
 exact spelling it was written for, it can also change matching text in comments and strings, it cannot tell two
-classes with the same simple name apart, and it does not fix logic. (The build file lists the JavaParser library as
-a dependency, but the porter does not use it.)
+classes with the same simple name apart, and it does not fix logic.
 
-The steps run in this order: `build.gradle` → `gradle.properties` → Java sources (rules, then mixin method renames)
-→ resources/data → migration warnings → mod metadata → access widener → `gradlew compileJava`. Every step is
-described in [Architecture & Pipeline](/mc-mod-porter/architecture-and-pipeline/).
+Yarn → Mojang remapping is separate from these rules: it uses the official Yarn and Mojang mapping files and reads
+code token by token, so it never changes comments or strings
+([details](/mc-mod-porter/architecture-and-pipeline/#39--remapping-yarn--mojang)).
+
+The steps run in this order: build scripts + Gradle wrapper → `gradle.properties` → Yarn → Mojang remap (when
+needed) → Java version rules (then mixin method renames) → resources/data → migration warnings → mod metadata →
+access widener → stale version check → `gradlew compileJava`. Every step is described in
+[Architecture & Pipeline](/mc-mod-porter/architecture-and-pipeline/).
 
 ### Jumping several versions at once
 
@@ -67,7 +71,8 @@ downgrade** (most rules are defined in both directions).
 The porter does **not** build an intermediate project for every version in between. It:
 
 1. Collects the rules of **every adjacent hop** between the two versions, in order
-   (`1.20.1→1.20.2`, `1.20.2→1.20.3`, … `26.2→26.3`), plus any rule defined directly for that exact jump.
+   (`1.20.1→1.20.2`, `1.20.2→1.20.3`, … `26.2→26.3`), plus any rule group whose two versions both lie on that
+   path (for example `1.19.4→1.20.1`).
 2. Removes duplicates — if two hops rename the same thing, the earliest hop's rule is kept.
 3. Applies the combined rule list to your sources **once**.
 4. Writes dependency versions and metadata straight from the **target** version's entry in the built-in version
@@ -102,8 +107,8 @@ The biggest hop in the knowledge base:
 
 - **Version format:** `1.21.11` was the last 1.x release; `26.1` is the first calendar release.
 - **Java 25 required** (was 21). Update `languageVersion = JavaLanguageVersion.of(25)`.
-- **Obfuscation removed:** no Yarn/Mojang remapping; every mod must at least be **recompiled** — no binary compatibility.
-- **Fabric build script:** `id 'fabric-loom'` + `mappings …` → `id 'net.fabricmc.fabric-loom' version '1.15'` with the mappings line removed; `modImplementation` for Fabric API → plain `implementation`.
+- **Obfuscation removed:** no mappings in the build any more; every mod must at least be **recompiled** — no binary compatibility. Yarn does not exist for 26.x, so Yarn sources need Mojang names (the porter [remaps them](/mc-mod-porter/architecture-and-pipeline/#39--remapping-yarn--mojang)).
+- **Fabric build script:** `id 'fabric-loom'` + `mappings …` → `id 'net.fabricmc.fabric-loom'` with the mappings line removed; `mod*` configurations → plain ones (`modImplementation` → `implementation`), `remapJar` → `jar`. Fabric's 26.1 announcement used Loom `1.15`; the current official example mod uses Loom `1.19-SNAPSHOT` with Gradle `9.8.2`, which is what the porter writes.
 - **Fabric API changes:** `HudRenderCallback` → `HudElementRegistry`; `ItemGroupEvents` → `CreativeModeTabEvents`; `ColorProviderRegistry` → `BlockColorRegistry`; `fabric-convention-tags-v1` and `fabric-loot-api-v2` removed; `TradeOfferHelper` removed (trading is data-driven).
 - **NeoForge:** four-component versions, `26.1.0.<build>[-beta]`.
 
@@ -123,14 +128,12 @@ Sources: [Fabric 26.1 announcement](https://fabricmc.net/2026/03/14/261.html), [
 
 See `patterns/method-renames.md` and `patterns/class-moves.md` in the repository for the full tables.
 
-## Using the knowledge base with an AI assistant
+## Porting by hand with the knowledge base
 
-AI models have a training cutoff, can hallucinate plausible method names, and cannot reliably guess exact loader
-versions. The recommended workflow is:
-
-1. Look up the version change in the knowledge base.
-2. Give the relevant file to the AI as context.
-3. Ask the AI to apply **only** the documented changes.
+1. Look up every version hop between your source and target in `knowledge-base/minecraft/`.
+2. Apply **only** the documented changes, using the exact names from the file.
+3. Take loader, API and plugin versions from `knowledge-base/loaders/` or the
+   [version table](/mc-mod-porter/supported-versions/#versions-the-porter-writes).
 
 ## Contributing data
 

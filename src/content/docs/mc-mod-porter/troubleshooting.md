@@ -21,9 +21,9 @@ changed method behaviour, mixins into code that no longer exists, third-party mo
    [Knowledge Base](/mc-mod-porter/knowledge-base/) for the version hops you crossed.
 5. **Read `build/port-report.json`.** For 26.2/26.3 upgrades the `warnings` step lists code the porter found but
    could not migrate automatically — those lines almost always need manual changes.
-6. **Check what the porter doesn't touch:** hard-coded versions in `build.gradle`, Kotlin-DSL plugin and dependency
-   lines, NeoForge/Architectury plugin versions, `*.mixins.json` `compatibilityLevel`, the Gradle wrapper (except
-   26.3) and the Java toolchain outside 21 ↔ 25. Also check
+6. **Check what the porter doesn't touch:** third-party dependency versions (the `stale-versions` step in the report
+   lists them), Architectury Loom / ForgeGradle plugin versions, and `MANUAL` lines from the remap step (overloaded
+   methods, mixin target strings). Also check
    [which rules exist for your version range](/mc-mod-porter/migration-rules/#known-gaps-in-the-rule-set) — some
    hops have none.
 
@@ -39,11 +39,11 @@ You selected a `.jar` (or `.zip`). Compiled mod JARs from Modrinth/CurseForge ca
 
 ### "Unknown source version" / "Unknown target version"
 
-The version is not in the supported list. Run `java -jar auto-porter-1.3.0-beta.jar --list-versions` and use an exact entry (e.g. `1.17.1`, not `1.17`; `1.19`, not `1.19.0`). See [Supported Versions](/mc-mod-porter/supported-versions/).
+The version is not in the supported list. Run `java -jar auto-porter-1.4.0-beta.jar --list-versions` and use an exact entry (e.g. `1.17.1`, not `1.17`; `1.19`, not `1.19.0`). See [Supported Versions](/mc-mod-porter/supported-versions/).
 
 ### "ERROR: Mod path does not exist: …"
 
-The folder path is wrong. Quote paths that contain spaces: `java -jar auto-porter-1.3.0-beta.jar "C:/My Mods/mymod" 1.20.1 1.21.1`.
+The folder path is wrong. Quote paths that contain spaces: `java -jar auto-porter-1.4.0-beta.jar "C:/My Mods/mymod" 1.20.1 1.21.1`.
 
 ### "Usage: auto-porter <modPath> <fromVersion> <toVersion> [--dry-run] [--no-build]"
 
@@ -89,21 +89,41 @@ and recreated.
 There are no Java rules for that version range. Build files, `gradle.properties`, metadata and the access widener are
 still updated. See [Migration Rules](/mc-mod-porter/migration-rules/#known-gaps-in-the-rule-set).
 
+### "still contains … (source Minecraft version)" after porting
+
+The [stale version check](/mc-mod-porter/architecture-and-pipeline/#99--stale-version-check) found an old version
+number the porter doesn't manage — usually a third-party dependency such as `jei-1.21.1-neoforge`. Look up the build
+of that library for your target version and update the line by hand.
+
 ### Versions in `build.gradle` / `build.gradle.kts` didn't change
 
-The porter only changes versions in `gradle.properties`. Hard-coded versions (`id 'fabric-loom' version '…'`,
-`"net.fabricmc:fabric-loader:0.15.11"`) and Kotlin-DSL lines (`id("fabric-loom")`, `modImplementation("…")`) must be
-updated by hand.
+Since v1.4.0-beta the porter updates hard-coded versions too (Loom and ModDevGradle plugins, `neoForge { version }`,
+fabric-loader / fabric-api / neoforge / minecraft dependencies) in Groovy and Kotlin DSL. Versions of other plugins
+(Architectury Loom, ForgeGradle) and third-party libraries are left alone — the stale version check lists them. On
+older porter versions, update them by hand.
+
+### Remapping failed / "check your internet connection"
+
+The first remap for a Minecraft version downloads Yarn's mappings from `maven.fabricmc.net` and Mojang's from
+`piston-meta.mojang.com`, then caches them in `~/.mc-mod-porter/mappings/`. Run the port again when you are online,
+or use `--no-remap` to port without remapping (26.x targets then need the Yarn names fixed by hand).
+
+### `cannot find symbol` on Yarn names after a remapped port
+
+The remapper skips names it can't map safely: methods on local variables whose Yarn name has several Mojang names
+(e.g. `player.getBlockPos()`), overloads with different Mojang names (reported as `MANUAL … has several Mojang
+names`), and mixin target strings. Look these up in the target version's Mojang names and fix them by hand.
 
 ### Mixin `compatibilityLevel` errors
 
-`*.mixins.json` is not edited. After a Java toolchain change set `"compatibilityLevel"` to match, e.g. `"JAVA_21"` or
-`"JAVA_25"`.
+Since v1.4.0-beta the porter sets `"compatibilityLevel"` in `*.mixins.json` to the target's Java (e.g. `"JAVA_25"`).
+If you still get an error, check that the build uses the same JDK ([table](/mc-mod-porter/supported-versions/#java-requirements)).
 
 ### A `1.19.x → 1.20.x` port still uses `MatrixStack`/`DrawableHelper`
 
-The `GuiGraphics` rules are tied to the exact pair `1.19.4 → 1.20.1`. Port in two runs (`1.19.x → 1.19.4`, then
-`1.19.4 → 1.20.1`) or apply the [1.19.4 → 1.20.1 rules](/mc-mod-porter/migration-rules/) by hand.
+Fixed in v1.4.0-beta: rule groups such as `1.19.4 → 1.20.1` are applied whenever the port passes through both
+versions (for example `1.19.2 → 1.20.4`). On older versions, port in two runs (`1.19.x → 1.19.4`, then
+`1.19.4 → 1.20.1`).
 
 ### Linux/macOS: `./gradlew: Permission denied`
 
@@ -311,9 +331,9 @@ Source: [Architectury Loom](https://github.com/architectury/architectury-loom)
 
 ### Fabric Loom fails after changing Minecraft versions
 
-Use the Loom line required by Fabric for the target Minecraft version and then select an actually published build from Fabric Maven. This repository uses `1.17.13` for Minecraft 26.2 and stable Loom `1.17.21` with Gradle `9.6.0` for Minecraft 26.3, matching Fabric's official 26.3 release guidance for the Loom 1.17 line.
+Use the Loom version and Gradle wrapper from the official Fabric example mod branch for the target Minecraft version, and select an actually published build from Fabric Maven. Every current example-mod branch (1.16 through 26.3) uses Loom `1.19-SNAPSHOT` with Gradle `9.8.2`, and MC Mod Porter writes those values. Loom `1.19` needs Gradle 9 — an old wrapper such as Gradle 8.x fails before your code compiles.
 
-Sources: [Fabric development for Minecraft 26.2](https://fabricmc.net/2026/06/15/262.html), [Fabric for Minecraft 26.3](https://fabricmc.net/2026/09/15/263.html), [Fabric Loom Maven](https://maven.fabricmc.net/net/fabricmc/fabric-loom/)
+Sources: [Fabric example mod](https://github.com/FabricMC/fabric-example-mod), [Fabric development for Minecraft 26.2](https://fabricmc.net/2026/06/15/262.html), [Fabric for Minecraft 26.3](https://fabricmc.net/2026/09/15/263.html), [Fabric Loom Maven](https://maven.fabricmc.net/net/fabricmc/fabric-loom/)
 
 ### `silentMojangMappingsLicense() not found`
 

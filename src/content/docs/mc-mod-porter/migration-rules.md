@@ -1,6 +1,6 @@
 ---
 title: Migration Rules Reference
-description: Every automatic change MC Mod Porter v1.3.0-beta makes to Java sources, mixin targets, resources and data, every manual-review warning, and the known gaps in the rule set.
+description: Every automatic change MC Mod Porter v1.4.0-beta makes to Java sources, mixin targets, resources and data, every manual-review warning, and the known gaps in the rule set.
 sidebar:
   label: Migration Rules
 ---
@@ -13,8 +13,10 @@ need is not on this page, the porter does not make it — fix it by hand using t
 ## How to read this page
 
 - Rules are grouped by the **version pair** they belong to. A port uses the groups of every adjacent hop it crosses
-  plus any group for the exact source → target pair (see
-  [Architecture & Pipeline](/mc-mod-porter/architecture-and-pipeline/#37--java-sources)).
+  plus every group whose two versions both lie on the port's path, in the same direction (see
+  [Architecture & Pipeline](/mc-mod-porter/architecture-and-pipeline/#49--version-rules-java-sources)).
+- Since v1.4.0-beta, Yarn sources can be [remapped to Mojang names](/mc-mod-porter/architecture-and-pipeline/#39--remapping-yarn--mojang)
+  before these rules run, so rules written for Mojang names also apply to former Yarn projects.
 - **Find / Replace with** are exact text: the rule only fires if your code contains that exact spelling.
   `⏎` marks a line break inside a rule.
 - Most rules are defined in both directions; the downgrade version swaps *Find* and *Replace with*.
@@ -22,13 +24,12 @@ need is not on this page, the porter does not make it — fix it by hand using t
 
 ## Known gaps in the rule set
 
-:::caution[Some rules only fire for one exact source → target pair]
-58 of the 398 source rules are attached to two versions that are **not neighbours** in the version list (for example
-`1.19.4 → 1.20.1` or `1.21.4 → 1.21.10`). Because the porter chains *adjacent* hops, those groups are only used when
-your source and target are **exactly** that pair. Porting `1.19.2 → 1.20.1`, or `1.19.4 → 1.21`, skips the
-`GuiGraphics` rules entirely. These groups are marked ⚠️ below.
-
-Six rules use version `1.19.0`, which is not a version the porter knows (it uses `1.19`), so they **never** fire.
+:::note[Span groups]
+58 of the source rules belong to two versions that are **not neighbours** in the version list (for example
+`1.19.4 → 1.20.1` or `1.21.4 → 1.21.10`). Since v1.4.0-beta such a group is applied whenever your port passes through
+both versions in that direction — porting `1.19.2 → 1.20.4` uses the `1.19.4 → 1.20.1` `GuiGraphics` rules. (Before,
+they only fired for that exact source → target pair, and six rules written for `1.19.0` never fired; they now use
+`1.19`.)
 :::
 
 - **Adjacent hops that have Java rules:** 1.16.5↔1.17.1, 1.19.2↔1.19.3, 1.19.2→1.19.1 (downgrade only),
@@ -36,7 +37,7 @@ Six rules use version `1.19.0`, which is not a version the porter knows (it uses
   1.21.11↔26.1, 26.1.2→26.2 and 26.2→26.3 (upgrade only).
 - **Every other hop has no Java rules of its own** — including 1.16→1.16.5, 1.17.1→1.18.2, 1.19→1.19.2 (upgrade),
   1.19.3→1.20.1, 1.20.2→1.20.4, 1.20.5→1.20.6, 1.21.1→1.21.5, 1.21.6→1.21.8, 1.21.9→1.21.10 and 26.1→26.1.2. Across
-  those hops you only get build-file, version and metadata updates (plus any exact-pair group that matches).
+  those hops you only get build-file, version and metadata updates (plus any span group the port covers).
 - The large 26.1.2 → 26.2 (177 rules) and 26.2 → 26.3 (57 rules) groups are **upgrade only** — there are no
   reverse rules for downgrading from 26.2/26.3.
 - Resource/data migrations and manual-review warnings exist **only for upgrades** through 26.2 and 26.3.
@@ -139,7 +140,7 @@ based on.
 | `TEXT_REPLACE` | `LogManager.getLogger(` | `LoggerFactory.getLogger(` | LogManager.getLogger → LoggerFactory.getLogger in 1.17+ |
 | `TEXT_REPLACE` | `Minecraft.getInstance().getTextureManager().bind(skin);` | `RenderSystem.setShaderTexture(0, skin);` | TextureManager.bind → RenderSystem.setShaderTexture in 1.17+ |
 
-### `1.16.5` → `1.21.10` — ⚠️ only applied when porting **exactly** `1.16.5` → `1.21.10`
+### `1.16.5` → `1.21.10` — span group: applied when the port passes through `1.16.5` and `1.21.10`
 
 2 rule(s) (also reversed for the downgrade).
 
@@ -159,7 +160,7 @@ based on.
 | `TEXT_REPLACE` | `LoggerFactory.getLogger(` | `LogManager.getLogger(` | LoggerFactory.getLogger → LogManager.getLogger for pre-1.17 |
 | `TEXT_REPLACE` | `RenderSystem.setShaderTexture(0, skin);` | `Minecraft.getInstance().getTextureManager().bind(skin);` | RenderSystem.setShaderTexture → TextureManager.bind for pre-1.17 |
 
-### `1.17.1` → `1.18.2` — ⚠️ only applied when porting **exactly** `1.17.1` → `1.18.2`
+### `1.17.1` → `1.18.2` — span group: applied when the port passes through `1.17.1` and `1.18.2`
 
 2 rule(s) (also reversed for the downgrade).
 
@@ -168,7 +169,7 @@ based on.
 | `TEXT_REPLACE` | `net.minecraft.world.World` | `net.minecraft.world.level.Level` | World → Level |
 | `TEXT_REPLACE` | `net.minecraft.entity.player.PlayerEntity` | `net.minecraft.world.entity.player.Player` | PlayerEntity → Player |
 
-### `1.18.2` → `1.19.0` — ⚠️ **never applied** (uses a version the porter doesn't know)
+### `1.18.2` → `1.19`
 
 2 rule(s) (downgrade only).
 
@@ -177,7 +178,7 @@ based on.
 | `TEXT_REPLACE` | `new net.minecraft.network.chat.TextComponent(` | `Component.literal(` | new TextComponent() → Component.literal() in 1.19+ |
 | `TEXT_REPLACE` | `this.init(this.minecraft, this.width, this.height);` | `this.rebuildWidgets();` | init(minecraft,width,height) → rebuildWidgets() in 1.19+ |
 
-### `1.19.0` → `1.18.2` — ⚠️ **never applied** (uses a version the porter doesn't know)
+### `1.19` → `1.18.2`
 
 3 rule(s) (upgrade only).
 
@@ -187,7 +188,7 @@ based on.
 | `IMPORT_CHANGE` | `import net.minecraft.network.chat.Component;` | *(removed)* | Remove Component import when downgrading to pre-1.19 (TextComponent is fully qualified) |
 | `TEXT_REPLACE` | `this.rebuildWidgets();` | `this.init(this.minecraft, this.width, this.height);` | Screen.rebuildWidgets() → init(minecraft, width, height) for pre-1.19 |
 
-### `1.19.1` → `1.19.0` — ⚠️ **never applied** (uses a version the porter doesn't know)
+### `1.19.1` → `1.19`
 
 1 rule(s) (downgrade only).
 
@@ -221,7 +222,7 @@ based on.
 | `TEXT_REPLACE` | `.setHint(Component.literal(` | `// .setHint removed (not available pre-1.19.3)` | EditBox.setHint() not available pre-1.19.3; remove call |
 | `TEXT_REPLACE` | `nameField.setFocused(true);` | `this.setFocused(nameField);` | setFocused(boolean) protected pre-1.19.3; use Screen.setFocused(GuiEventListener) |
 
-### `1.19.4` → `1.19.2` — ⚠️ only applied when porting **exactly** `1.19.4` → `1.19.2`
+### `1.19.4` → `1.19.2` — span group: applied when the port passes through `1.19.4` and `1.19.2`
 
 1 rule(s) (downgrade only).
 
@@ -229,7 +230,7 @@ based on.
 |---|---|---|---|
 | `TEXT_REPLACE` | `Button.builder(` | `new Button(` | Button.builder() → new Button() constructor for pre-1.19.3 (reorder args: move .bounds() values to start) |
 
-### `1.19.4` → `1.20.1` — ⚠️ only applied when porting **exactly** `1.19.4` → `1.20.1`
+### `1.19.4` → `1.20.1` — span group: applied when the port passes through `1.19.4` and `1.20.1`
 
 10 rule(s) (some rules also reversed).
 
@@ -246,7 +247,7 @@ based on.
 | `METHOD_SIGNATURE` | `render(MatrixStack matrices,` | `render(GuiGraphics guiGraphics,` | render() MatrixStack → GuiGraphics |
 | `IMPORT_CHANGE` | `net.minecraft.client.gui.DrawableHelper` | `net.minecraft.client.gui.GuiGraphics` | DrawableHelper → GuiGraphics |
 
-### `1.20.1` → `1.19.4` — ⚠️ only applied when porting **exactly** `1.20.1` → `1.19.4`
+### `1.20.1` → `1.19.4` — span group: applied when the port passes through `1.20.1` and `1.19.4`
 
 1 rule(s) (downgrade only).
 
@@ -264,7 +265,7 @@ based on.
 | `IMPORT_CHANGE` | `net.minecraftforge` | `net.neoforged` | Forge → NeoForge package rename |
 | `TEXT_REPLACE` | `minecraftforge` | `neoforged` | minecraftforge → neoforged |
 
-### `1.20.1` → `1.21.10` — ⚠️ only applied when porting **exactly** `1.20.1` → `1.21.10`
+### `1.20.1` → `1.21.10` — span group: applied when the port passes through `1.20.1` and `1.21.10`
 
 1 rule(s) (also reversed for the downgrade).
 
@@ -320,7 +321,7 @@ based on.
 |---|---|---|---|
 | `TEXT_REPLACE` | `minecraft ~1.21"` | `minecraft ~1.21.1"` | fabric.mod.json minecraft version constraint |
 
-### `1.21.1` → `1.21.4` — ⚠️ only applied when porting **exactly** `1.21.1` → `1.21.4`
+### `1.21.1` → `1.21.4` — span group: applied when the port passes through `1.21.1` and `1.21.4`
 
 1 rule(s) (also reversed for the downgrade).
 
@@ -328,7 +329,7 @@ based on.
 |---|---|---|---|
 | `TEXT_REPLACE` | `minecraft ~1.21.1"` | `minecraft ~1.21.4"` | fabric.mod.json minecraft version constraint |
 
-### `1.21.4` → `1.21.10` — ⚠️ only applied when porting **exactly** `1.21.4` → `1.21.10`
+### `1.21.4` → `1.21.10` — span group: applied when the port passes through `1.21.4` and `1.21.10`
 
 6 rule(s) (upgrade only).
 
@@ -341,7 +342,7 @@ based on.
 | `TEXT_REPLACE` | `keyCode == GLFW.GLFW_KEY_ENTER \|\| keyCode == GLFW.GLFW_KEY_KP_ENTER` | `event.key() == GLFW.GLFW_KEY_ENTER \|\| event.key() == GLFW.GLFW_KEY_KP_ENTER` | keyCode → event.key() in keyPressed body for 1.21.10 |
 | `TEXT_REPLACE` | `return super.keyPressed(keyCode, scanCode, modifiers);` | `return super.keyPressed(event);` | super.keyPressed(int,int,int) → super.keyPressed(KeyEvent) in 1.21.10 |
 
-### `1.21.10` → `1.21.4` — ⚠️ only applied when porting **exactly** `1.21.10` → `1.21.4`
+### `1.21.10` → `1.21.4` — span group: applied when the port passes through `1.21.10` and `1.21.4`
 
 13 rule(s) (downgrade only).
 
