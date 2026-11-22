@@ -33,23 +33,34 @@ search snippets and compile-only claims are not treated as primary evidence. See
 
 ## What it does
 
-The auto-porter handles the **mechanical, repetitive part** of version porting:
+The auto-porter handles the **mechanical, repetitive part** of version porting. It copies your project to
+`<mod>-ported-<target>` and then:
 
-1. Updates `build.gradle` plugin versions
-2. Updates `gradle.properties` dependency versions
-3. Applies Java source/API migration patches
-4. Updates Fabric/NeoForge mod metadata (`fabric.mod.json`, `neoforge.mods.toml`)
-5. Runs build verification and reports remaining errors
-6. Uses the verified migration knowledge base for supported version hops
+1. **`build.gradle`** — structural changes for 26.x (Loom plugin ID, removing/re-adding the mappings line,
+   `modImplementation` ↔ `implementation`, Java toolchain 21 ↔ 25, Gradle wrapper for 26.3)
+2. **`gradle.properties`** — Minecraft, Fabric Loader/API, Loom, NeoForge/Forge and Architectury versions
+3. **Java sources** — 398 verified find-and-replace rules plus mixin target renames
+4. **Resources/data** — pack formats, shaders, tags and worldgen for 26.2/26.3 upgrades
+5. **Manual-review warnings** for semantic 26.2/26.3 changes it can't safely rewrite
+6. **Mod metadata** — `fabric.mod.json` dependencies and the `mods.toml` Minecraft range
+7. **Access widener ↔ class tweaker** for 26.x
+8. **Compile check** — `gradlew compileJava` with an automatically chosen JDK
 
-Each port writes a machine-readable report to `build/port-report.json` in the ported project, and a migration warning
-scanner flags code that needs manual work.
+Each port writes a machine-readable report to `build/port-report.json` and the full build output to
+`port-build.log`. Every step is explained in [Architecture & Pipeline](/mc-mod-porter/architecture-and-pipeline/),
+every flag and button in the [CLI & GUI Reference](/mc-mod-porter/cli-and-gui-reference/), and every automatic
+change in [Migration Rules](/mc-mod-porter/migration-rules/).
 
 ## What it does not do
 
-**Logic changes.** If your code uses APIs that were completely redesigned, you need to fix those manually — the tool
-tells you where. Semantic API changes, mixins and third-party dependencies can require manual fixes; a completed port
-is **not** a guarantee that every mod compiles or runs. Always review the output, warnings and `port-report.json`.
+**Logic changes.** If your code uses APIs that were completely redesigned, you need to fix those manually — for
+26.2/26.3 upgrades the tool tells you where. Semantic API changes, mixins and third-party dependencies can require
+manual fixes; a completed port is **not** a guarantee that every mod compiles or runs. Always review the output,
+warnings and `port-report.json`.
+
+It also does **not**: edit `settings.gradle`, hard-coded versions inside `build.gradle`, NeoForge/Architectury Gradle
+plugin versions, `*.mixins.json` (`compatibilityLevel`), Kotlin-DSL plugin/dependency lines, Kotlin sources, or the
+Java toolchain outside the 21 ↔ 25 switch.
 
 :::caution[Source projects only]
 Auto-Porter needs a **mod source/project folder** containing `build.gradle`, `gradle.properties`,
@@ -57,13 +68,15 @@ Auto-Porter needs a **mod source/project folder** containing `build.gradle`, `gr
 ZIP, extract it first.
 :::
 
-## How it works
+## Porting by hand with the repository
+
+The repository is also a reference you can use without the tool (or with an AI assistant):
 
 1. **Check** `knowledge-base/minecraft/` for breaking API changes between versions
 2. **Look up** `patterns/` for quick cross-version rename tables
 3. **Find** `knowledge-base/loaders/` for correct dependency versions
 4. **Verify** `java/` for Java toolchain requirements
-5. **Run** `auto-porter` to automatically apply known patterns
+5. **Run** `auto-porter` to apply the changes it automates, then fix the rest by hand
 
 ## Repository layout
 

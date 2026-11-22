@@ -31,9 +31,15 @@ documents is backed by a **linked official source**.
 
 ## How the porter applies rules
 
-Inside `auto-porter`, the knowledge base is encoded as `ApiChangeRule`s. Each rule has one of these types:
+The `knowledge-base/minecraft/*.md` files are **documentation for humans and AI assistants** — the porter does not
+read them at runtime. What the porter actually applies is a hand-maintained copy of the verified changes in its
+source code: 398 `ApiChangeRule`s, a few mixin method renames, and the 26.2/26.3 resource migrations. The full list
+is on the [Migration Rules](/mc-mod-porter/migration-rules/) page. A KB file can therefore describe a change the
+porter doesn't automate yet.
 
-| Rule type | What it changes |
+Each rule has a type label:
+
+| Rule type | Meant for |
 |---|---|
 | `CLASS_RENAME` | A class was renamed |
 | `METHOD_RENAME` | A method was renamed |
@@ -41,17 +47,47 @@ Inside `auto-porter`, the knowledge base is encoded as `ApiChangeRule`s. Each ru
 | `FIELD_RENAME` | A field was renamed |
 | `IMPORT_CHANGE` | A class moved to another package |
 | `MIXIN_TARGET` | A mixin target method/descriptor changed |
-| `TEXT_REPLACE` | A safe textual replacement (build scripts, metadata) |
+| `TEXT_REPLACE` | Any other exact text change |
 
-The patchers run in order: **build file** (`BuildFilePatcher`), **gradle.properties** (`GradlePropertiesPatcher`),
-**Java sources** (`SourcePatcher`, using JavaParser), **mixin targets** (`MixinTargetResolver`), **access wideners**
-(`AccessWidenerPatcher`), **resources/pack metadata** (`ResourcePatcher`) and **mod metadata** (`ModMetaPatcher`).
-Then `BuildRunner` runs Gradle unless `--no-build` or `--dry-run` was passed.
+The type is only a label: **every rule is a literal find-and-replace** (`String.replace`) of an exact piece of text,
+applied one rule after another to each `.java` file. Nothing is parsed or type-checked, so a rule only fires on the
+exact spelling it was written for, it can also change matching text in comments and strings, it cannot tell two
+classes with the same simple name apart, and it does not fix logic. (The build file lists the JavaParser library as
+a dependency, but the porter does not use it.)
+
+The steps run in this order: `build.gradle` → `gradle.properties` → Java sources (rules, then mixin method renames)
+→ resources/data → migration warnings → mod metadata → access widener → `gradlew compileJava`. Every step is
+described in [Architecture & Pipeline](/mc-mod-porter/architecture-and-pipeline/).
+
+### Jumping several versions at once
+
+You can port straight from any supported version to any other — e.g. `1.20.1` → `26.3` — and **upgrade or
+downgrade** (most rules are defined in both directions).
+
+The porter does **not** build an intermediate project for every version in between. It:
+
+1. Collects the rules of **every adjacent hop** between the two versions, in order
+   (`1.20.1→1.20.2`, `1.20.2→1.20.3`, … `26.2→26.3`), plus any rule defined directly for that exact jump.
+2. Removes duplicates — if two hops rename the same thing, the earliest hop's rule is kept.
+3. Applies the combined rule list to your sources **once**.
+4. Writes dependency versions and metadata straight from the **target** version's entry in the built-in version
+   database.
+
+You get one output folder, `<mod>-ported-<target>` (e.g. `mymod-ported-26_3`). The bigger the jump, the more
+redesigned APIs fall outside simple renames, so expect more manual fixes and migration warnings on large jumps.
+
+:::caution[Some rules are tied to one exact version pair]
+A few rule groups are attached to versions that aren't neighbours (for example `1.19.4 → 1.20.1`, where
+`GuiGraphics` arrived). Those groups are only used when your source and target are **exactly** that pair — a
+`1.19.2 → 1.20.1` port skips them. See [Migration Rules → Known gaps](/mc-mod-porter/migration-rules/#known-gaps-in-the-rule-set).
+:::
 
 ### Migration warnings (manual work)
 
-Some changes are **not one-to-one** and are never rewritten automatically. `MigrationWarningScanner` searches your
-sources for them and lists each hit in the log and in `port-report.json`. For 26.2, for example, it flags:
+Some changes are **not one-to-one** and are never rewritten automatically. When a port **upgrades through 26.2 or
+26.3**, `MigrationWarningScanner` searches your sources and resources for them and lists each hit in the log and in
+`port-report.json` (full list: [Migration Rules](/mc-mod-porter/migration-rules/#manual-review-warnings)). Other
+version ranges get no warnings. For 26.2, for example, it flags:
 
 - `valueLookupBuilder`, `HolderTagProvider`, `IntrinsicHolderTagsProvider`, `KeyTagProvider`, `BlockItemTagsProvider` (data-gen / tag provider rework)
 - `StructureProcessor`, `StructureProcessorType` (processors now use `MapCodec` directly)

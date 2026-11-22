@@ -26,8 +26,11 @@ export default defineConfig({
 					items: [
 						{ label: 'Overview & Golden Rule', slug: 'mc-mod-porter' },
 						{ label: 'Quickstart (GUI & CLI)', slug: 'mc-mod-porter/quickstart' },
+						{ label: 'CLI & GUI Reference', slug: 'mc-mod-porter/cli-and-gui-reference' },
+						{ label: 'Architecture & Pipeline', slug: 'mc-mod-porter/architecture-and-pipeline' },
 						{ label: 'Supported Versions & JDK', slug: 'mc-mod-porter/supported-versions' },
-						{ label: 'Knowledge Base & Migration Rules', slug: 'mc-mod-porter/knowledge-base' },
+						{ label: 'Migration Rules', slug: 'mc-mod-porter/migration-rules' },
+						{ label: 'Knowledge Base', slug: 'mc-mod-porter/knowledge-base' },
 						{ label: 'Troubleshooting', slug: 'mc-mod-porter/troubleshooting' },
 						{ label: 'FAQ', slug: 'mc-mod-porter/faq' },
 					],

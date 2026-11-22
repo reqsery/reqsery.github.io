@@ -3,6 +3,34 @@ title: Troubleshooting
 description: Fixes for common MC Mod Porter errors and build failures in ported Fabric/NeoForge projects.
 ---
 
+## The ported mod doesn't compile — where do I start?
+
+This is normal, especially for big version jumps. The porter only does the **mechanical** part (renames, moved
+classes, build files, versions). Anything Minecraft or the loader **redesigned** — new rendering, new registration,
+changed method behaviour, mixins into code that no longer exists, third-party mods — has to be fixed by hand.
+
+1. **Find the first real error.** Open `port-build.log` in the ported folder (the porter's `compileJava` output), or
+   run `./gradlew build` (Windows: `gradlew.bat build`) yourself, and scroll to the **first** `error:` line. Later
+   errors are often caused by the first one, so fix from the top.
+2. **Check the Java version.** `invalid source release` or `UnsupportedClassVersionError` means the wrong JDK —
+   26.x projects need **JDK 25**, 1.20.5–1.21.11 need **JDK 21** ([table](/mc-mod-porter/supported-versions/#java-requirements)).
+3. **"Could not find …" / "Could not resolve …"** is a dependency problem, not your code: a loader, Loom or
+   third-party API version that isn't published for the target version. See
+   [Dependency resolution](#dependency-resolution).
+4. **`cannot find symbol` / `no suitable method`** means an API changed. Look the name up in this page and in the
+   [Knowledge Base](/mc-mod-porter/knowledge-base/) for the version hops you crossed.
+5. **Read `build/port-report.json`.** For 26.2/26.3 upgrades the `warnings` step lists code the porter found but
+   could not migrate automatically — those lines almost always need manual changes.
+6. **Check what the porter doesn't touch:** hard-coded versions in `build.gradle`, Kotlin-DSL plugin and dependency
+   lines, NeoForge/Architectury plugin versions, `*.mixins.json` `compatibilityLevel`, the Gradle wrapper (except
+   26.3) and the Java toolchain outside 21 ↔ 25. Also check
+   [which rules exist for your version range](/mc-mod-porter/migration-rules/#known-gaps-in-the-rule-set) — some
+   hops have none.
+
+When asking for help, post the **first error** (a few lines around it), your source and target versions, and the
+loader (Fabric or NeoForge). "It won't compile" alone isn't enough for anyone — including the bot — to tell what's
+wrong.
+
 ## Porter errors
 
 ### "Auto-Porter needs a mod source/project folder, not a compiled file"
@@ -11,7 +39,15 @@ You selected a `.jar` (or `.zip`). Compiled mod JARs from Modrinth/CurseForge ca
 
 ### "Unknown source version" / "Unknown target version"
 
-The version is not in the supported list. Run `java -jar auto-porter-1.3.0-beta.jar --list-versions` and use an exact entry (e.g. `1.17.1`, not `1.17`). See [Supported Versions](/mc-mod-porter/supported-versions/).
+The version is not in the supported list. Run `java -jar auto-porter-1.3.0-beta.jar --list-versions` and use an exact entry (e.g. `1.17.1`, not `1.17`; `1.19`, not `1.19.0`). See [Supported Versions](/mc-mod-porter/supported-versions/).
+
+### "ERROR: Mod path does not exist: …"
+
+The folder path is wrong. Quote paths that contain spaces: `java -jar auto-porter-1.3.0-beta.jar "C:/My Mods/mymod" 1.20.1 1.21.1`.
+
+### "Usage: auto-porter <modPath> <fromVersion> <toVersion> [--dry-run] [--no-build]"
+
+Fewer than three arguments were given. Flags go **after** the path and both versions.
 
 ### The porter itself will not start
 
@@ -19,11 +55,64 @@ MC Mod Porter requires **Java 21+**. Run `java -version`; if it reports an older
 
 ### "Port complete with issues — review port-report.json"
 
-The mechanical port finished but something needs attention: a failed patch step, a migration warning, or a failing build. Open `build/port-report.json` in the ported project — each step has `success`, `message` and `changes`. Migration warnings point to code that must be migrated by hand.
+Printed (with exit code 1) when the **`gradle.properties` step failed** (none found) or the **compile check failed**.
+Migration warnings alone do not cause it. Open `build/port-report.json` — each step has `success`, `message` and
+`changes`, and the `build` step has `errors` and the path of `port-build.log`. In the GUI this shows as
+**Completed with issues**.
+
+### "Java 25 is required to build this mod but was not found"
+
+The ported project's `build.gradle` asks for Java 25 (all 26.x targets) and no JDK 25 was found, so the compile check
+was not run. Install JDK 25 (e.g. Eclipse Temurin), point `JAVA_HOME` at it, and run `gradlew compileJava` in the
+ported folder. For Java 21 or lower, a missing JDK does not stop the check — Gradle runs with your default Java and
+may fail with `invalid source release`. The porter finds JDKs via `JAVA_HOME` and the usual Temurin, Microsoft,
+Oracle, Corretto and `/usr/lib/jvm` install folders; a JDK installed elsewhere is only found through `JAVA_HOME`.
+
+### "No gradle.properties found in …"
+
+The porter edits versions only through `gradle.properties` (root, `common/`, `fabric/` or `neoforge/`). Without it no
+versions are updated. Create one with `minecraft_version`, `loader_version`, `fabric_version`/`neo_version` etc., or
+update the versions in `build.gradle` by hand.
+
+### "No gradlew found at …"
+
+The ported project has no Gradle wrapper, so the compile check (and the GUI's Build/Run Client) can't run. Add one
+with `gradle wrapper` or copy it from an official template.
+
+### "Output dir already exists, removing: …"
+
+You ported to the same target before. The old output folder — **including any fixes you made in it** — is deleted
+and recreated.
+
+### "[WARN] No source rules found for X → Y"
+
+There are no Java rules for that version range. Build files, `gradle.properties`, metadata and the access widener are
+still updated. See [Migration Rules](/mc-mod-porter/migration-rules/#known-gaps-in-the-rule-set).
+
+### Versions in `build.gradle` / `build.gradle.kts` didn't change
+
+The porter only changes versions in `gradle.properties`. Hard-coded versions (`id 'fabric-loom' version '…'`,
+`"net.fabricmc:fabric-loader:0.15.11"`) and Kotlin-DSL lines (`id("fabric-loom")`, `modImplementation("…")`) must be
+updated by hand.
+
+### Mixin `compatibilityLevel` errors
+
+`*.mixins.json` is not edited. After a Java toolchain change set `"compatibilityLevel"` to match, e.g. `"JAVA_21"` or
+`"JAVA_25"`.
+
+### A `1.19.x → 1.20.x` port still uses `MatrixStack`/`DrawableHelper`
+
+The `GuiGraphics` rules are tied to the exact pair `1.19.4 → 1.20.1`. Port in two runs (`1.19.x → 1.19.4`, then
+`1.19.4 → 1.20.1`) or apply the [1.19.4 → 1.20.1 rules](/mc-mod-porter/migration-rules/) by hand.
 
 ### Linux/macOS: `./gradlew: Permission denied`
 
 Fixed in v1.3.0-beta (the porter restores the executable bit). On older versions run `chmod +x gradlew`.
+
+### GUI messages
+
+GUI pop-ups such as "The source Minecraft version could not be detected. Select it manually." or "Port a project
+first." are explained in the [CLI & GUI Reference](/mc-mod-porter/cli-and-gui-reference/#error-pop-ups).
 
 :::note
 The sections below come from the repository troubleshooting guide. Names differ by mapping namespace: examples labeled **Mojang mappings** use names such as `KeyMapping` and `GuiGraphics`; the same classes are `KeyBinding` and `DrawContext` in **Yarn**.
